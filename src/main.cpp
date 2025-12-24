@@ -1,7 +1,16 @@
 #include <iostream>
 #include <string>
+#include <fstream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <shader/shader.h>
+#include <cmath>
+
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 
 using namespace std; 
 
@@ -9,19 +18,9 @@ const char* WINDOW_NAME = "OPENGL WINDOW";
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 600;
 
-const char *vertexShaderSource = "#version 410 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
 
-const char *fragmentShaderSource = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-    "}\0";
+const char *vertexCodeString = "./shaders/shader.vert";
+const char *fragmentCodeString = "./shaders/shader.frag";
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -88,56 +87,60 @@ int main()
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    //vertex shader
-    unsigned int vertexShader;
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-
-    //fragment shader
-    unsigned int fragmentShader;
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-
-    //shader program
-    unsigned int shaderProgram;
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glUseProgram(shaderProgram);
-    //delete redundant shaders after linking
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader); 
+    Shader myShader(vertexCodeString, fragmentCodeString);
 
     //dodecahedron
+    const float gr = (1 + std::sqrt(5)) / 2;
     float vertices[] = {
-    -0.5f, -0.5f, 0.5f,
-    0.5f, -0.5f, 0.5f,
-    -0.5f, 0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-    -0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    -0.5f, 0.5f, -0.5f,
-    0.5f, 0.5f, -0.5f,
+        0, 1, gr,
+        0, -1, gr,
+        0, 1, -gr,
+        0, -1, -gr,
+        1, gr, 0,
+        -1, gr, 0,
+        1, -gr, 0,
+        -1, -gr, 0,
+        gr, 0, 1,
+        gr, 0, -1,
+        -gr, 0, 1,
+        -gr, 0, -1,
+        0, 0, 0
     };
     unsigned int indices[] = { 
-    0, 1, 2,
-    2, 1, 3,
-    5, 4, 7,
-    7, 4, 6,
-    4, 0, 6,
-    6, 0, 2,
-    1, 5, 3,
-    3, 5, 7,
-    2, 3, 6,
-    6, 3, 7,
-    4, 5, 0,
-    0, 5, 1
+    4,5,0,
+    4,5,2,
+    6,7,1,
+    6,7,3,
+    0,1,8,
+    0,1,10,
+    2,3,9,
+    2,3,11,
+    8,9,4,
+    8,9,6,
+    10,11,5,
+    10,11,7,
+    4,0,8,
+    4,2,9,
+    5,0,10,
+    5,2,11,
+    6,1,8,
+    6,3,9,
+    7,1,10,
+    7,3,11
     }; 
     
+    glm::vec3 objPositions[] = {
+        glm::vec3( 0.0f,  0.0f,  0.0f), 
+        glm::vec3( 2.0f,  5.0f, -15.0f), 
+        glm::vec3(-1.5f, -2.2f, -2.5f),  
+        glm::vec3(-3.8f, -2.0f, -12.3f),  
+        glm::vec3( 2.4f, -0.4f, -3.5f),  
+        glm::vec3(-1.7f,  3.0f, -7.5f),  
+        glm::vec3( 1.3f, -2.0f, -2.5f),  
+        glm::vec3( 1.5f,  2.0f, -2.5f), 
+        glm::vec3( 1.5f,  0.2f, -1.5f), 
+        glm::vec3(-1.3f,  1.0f, -1.5f)  
+    };
 
     //vertex buffer object
     unsigned int VBO;
@@ -167,13 +170,39 @@ int main()
         processInput(window);
 
         //rendering
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        //clear the colorbuffer
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-        glUseProgram(shaderProgram);
+        //activate shader
+        myShader.use();
+
+        //render triangles
+        glEnable(GL_DEPTH_TEST);
+
+        glm::mat4 view = glm::mat4(1.0f);
+        view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+        int viewLocation = glGetUniformLocation(myShader.ID, "view");
+        glUniformMatrix4fv(viewLocation, 1, false, glm::value_ptr(view));
+
+        glm::mat4 projection;
+        projection = glm::perspective(glm::radians(45.0f), (float)(WINDOW_WIDTH / WINDOW_HEIGHT), 0.1f, 100.0f);
+        int projLocation = glGetUniformLocation(myShader.ID, "projection");
+        glUniformMatrix4fv(projLocation, 1, false, glm::value_ptr(projection));
+
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+
+        for (int i = 0; i < 10; i++){
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, objPositions[i]);
+            model = glm::rotate(model, glm::radians((float)(30 * i))+(float)glfwGetTime(), glm::vec3(1.0f, 0.3f, 0.5f)); 
+            model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));
+            int modelLocation = glGetUniformLocation(myShader.ID, "model");
+            glUniformMatrix4fv(modelLocation, 1, false, glm::value_ptr(model));
+
+            glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(*indices), GL_UNSIGNED_INT, 0);
+        }
 
         //check and call events and swap the buffers
         glfwSwapBuffers(window);

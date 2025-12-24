@@ -1,38 +1,37 @@
 {
     "version": "2.0.0",
     "tasks": [
-      {
+        {
         "label": "build-opengl",
         "type": "shell",
         "command": "clang++",
         "args": [
-          "-std=c++17",
-          "-g",
-  
-          "src/main.cpp",
-          "src/glad.c",
-  
-          "-Iinclude",
-          "-Llib",
-          "-lglfw3",
-  
-          "-framework", "Cocoa",
-          "-framework", "IOKit",
-          "-framework", "CoreFoundation",
-          "-framework", "CoreGraphics",
-          "-framework", "OpenGL",
-  
-          "-o", "opengl_bin"
+            "-std=c++17",
+            "-g",
+    
+            "src/main.cpp",
+            "src/glad.c",
+    
+            "-Iinclude",
+            "-Llib",
+            "-lglfw3",
+    
+            "-framework", "Cocoa",
+            "-framework", "IOKit",
+            "-framework", "CoreFoundation",
+            "-framework", "CoreGraphics",
+            "-framework", "OpenGL",
+    
+            "-o", "opengl_bin"
         ],
         "options": {
-          "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}"
         },
         "problemMatcher": ["$clang"],
         "group": {
-          "kind": "build",
-          "isDefault": true
+            "kind": "build",
+            "isDefault": true
         }
-      }
+        }
     ]
-  }
-  
+    }
