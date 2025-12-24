@@ -1,0 +1,16 @@
+# Build artifacts
+opengl_bin
+*.o
+*.out
+
+# macOS junk
+.DS_Store
+
+# VS Code caches (NOT your configs)
+.vscode/ipch/
+.vscode/*.log
+
+# Optional: future CMake
+build/
+CMakeFiles/
+CMakeCache.txt
