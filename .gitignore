@@ -13,3 +13,5 @@ open_glbin
 # VS Code caches (keep configs!)
 .vscode/ipch/
 .vscode/*.log
+
+.vscode/
