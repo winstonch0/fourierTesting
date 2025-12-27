@@ -4,6 +4,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <shader/shader.h>
+#include <fftw/fftw3.h>
 #include <cmath>
 
 
@@ -77,8 +78,42 @@ void processInput(GLFWwindow *window)
         glfwSetWindowShouldClose(window, true);
 }
 
+float test_func(float x){
+    return x + (float)std::pow(x, 2);
+}
+
+fftw_complex *fft_test(int N){
+    fftw_complex *in, *out;
+    fftw_plan p;
+
+    in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+    out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+    p = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+    for (int x = 0; x < N; x++){
+        in[x][0] = test_func(float(x/float(N)));
+    }
+
+    fftw_execute(p);
+
+    fftw_destroy_plan(p);
+    fftw_free(in); 
+    return out;
+}
+
 int main()
 {
+    int num_frequencies = 10;
+
+    fftw_complex *test;
+    test = fft_test(num_frequencies);
+    for (int i = 0; i < 10; i++){
+        for (int j = 0; j<2; j++){
+            printf("%f ", test[j][i]);
+        }
+        printf("\n");
+    }
+
     GLFWwindow* window;
     if (!init_window(window)) {
         close(window);
@@ -91,56 +126,20 @@ int main()
 
     //dodecahedron
     const float gr = (1 + std::sqrt(5)) / 2;
-    float vertices[] = {
-        0, 1, gr,
-        0, -1, gr,
-        0, 1, -gr,
-        0, -1, -gr,
-        1, gr, 0,
-        -1, gr, 0,
-        1, -gr, 0,
-        -1, -gr, 0,
-        gr, 0, 1,
-        gr, 0, -1,
-        -gr, 0, 1,
-        -gr, 0, -1,
-        0, 0, 0
-    };
-    unsigned int indices[] = { 
-    4,5,0,
-    4,5,2,
-    6,7,1,
-    6,7,3,
-    0,1,8,
-    0,1,10,
-    2,3,9,
-    2,3,11,
-    8,9,4,
-    8,9,6,
-    10,11,5,
-    10,11,7,
-    4,0,8,
-    4,2,9,
-    5,0,10,
-    5,2,11,
-    6,1,8,
-    6,3,9,
-    7,1,10,
-    7,3,11
-    }; 
+    float vertices[(num_frequencies + 1) * 3];
+    unsigned int indices[num_frequencies * 2];
+    vertices[0] = 0;
+    vertices[1] = 0;
+    vertices[2] = 0;
+    for (int i = 0; i < 10; i++){
+        vertices[(i+1)*3] = test[i][0];
+        vertices[(i+1)*3+1] = test[i][1];
+        vertices[(i+1)*3+2] = 0;
+
+        indices[i*2] = i;
+        indices[i*2+1] = i+1;
+    }
     
-    glm::vec3 objPositions[] = {
-        glm::vec3( 0.0f,  0.0f,  0.0f), 
-        glm::vec3( 2.0f,  5.0f, -15.0f), 
-        glm::vec3(-1.5f, -2.2f, -2.5f),  
-        glm::vec3(-3.8f, -2.0f, -12.3f),  
-        glm::vec3( 2.4f, -0.4f, -3.5f),  
-        glm::vec3(-1.7f,  3.0f, -7.5f),  
-        glm::vec3( 1.3f, -2.0f, -2.5f),  
-        glm::vec3( 1.5f,  2.0f, -2.5f), 
-        glm::vec3( 1.5f,  0.2f, -1.5f), 
-        glm::vec3(-1.3f,  1.0f, -1.5f)  
-    };
 
     //vertex buffer object
     unsigned int VBO;
@@ -178,31 +177,30 @@ int main()
         //activate shader
         myShader.use();
 
-        //render triangles
         glEnable(GL_DEPTH_TEST);
 
+        //view matrix
         glm::mat4 view = glm::mat4(1.0f);
         view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
         int viewLocation = glGetUniformLocation(myShader.ID, "view");
         glUniformMatrix4fv(viewLocation, 1, false, glm::value_ptr(view));
 
+        //projection matrix
         glm::mat4 projection;
         projection = glm::perspective(glm::radians(45.0f), (float)(WINDOW_WIDTH / WINDOW_HEIGHT), 0.1f, 100.0f);
         int projLocation = glGetUniformLocation(myShader.ID, "projection");
         glUniformMatrix4fv(projLocation, 1, false, glm::value_ptr(projection));
 
+        //model matrix
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::scale(model, glm::vec3(0.1f, 0.1f, 1.0f));
+        int modelLocation = glGetUniformLocation(myShader.ID, "model");
+        glUniformMatrix4fv(modelLocation, 1, false, glm::value_ptr(model));
+
+        //render triangles
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 
-        for (int i = 0; i < 10; i++){
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, objPositions[i]);
-            model = glm::rotate(model, glm::radians((float)(30 * i))+(float)glfwGetTime(), glm::vec3(1.0f, 0.3f, 0.5f)); 
-            model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));
-            int modelLocation = glGetUniformLocation(myShader.ID, "model");
-            glUniformMatrix4fv(modelLocation, 1, false, glm::value_ptr(model));
-
-            glDrawElements(GL_TRIANGLES, sizeof(indices)/sizeof(*indices), GL_UNSIGNED_INT, 0);
-        }
+        glDrawElements(GL_LINES, sizeof(indices)/sizeof(*indices), GL_UNSIGNED_INT, 0);
 
         //check and call events and swap the buffers
         glfwSwapBuffers(window);
