@@ -132,8 +132,8 @@ int main()
     vertices[1] = 0;
     vertices[2] = 0;
     for (int i = 0; i < 10; i++){
-        vertices[(i+1)*3] = test[i][0];
-        vertices[(i+1)*3+1] = test[i][1];
+        vertices[(i+1)*3] = test[i][0] + vertices[(i+1)*3 - 2];
+        vertices[(i+1)*3+1] = test[i][1] + vertices[(i+1)*3 - 1];
         vertices[(i+1)*3+2] = 0;
 
         indices[i*2] = i;
