@@ -36,69 +36,6 @@ public:
     }
 };
 
-// -------------------- file read helper --------------------
-static std::string readFile(const char* path)
-{
-    std::ifstream f(path);
-    if (!f.is_open())
-    {
-        std::cerr << "Failed to open file: " << path << std::endl;
-        return {};
-    }
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return ss.str();
-}
-
-// -------------------- shader compile/link helpers --------------------
-static GLuint compileShader(GLenum type, const char* src)
-{
-    GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, nullptr);
-    glCompileShader(s);
-
-    GLint ok = 0;
-    glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok)
-    {
-        char log[2048];
-        glGetShaderInfoLog(s, sizeof(log), nullptr, log);
-        std::cerr << "Shader compile error:\n" << log << std::endl;
-    }
-    return s;
-}
-
-static GLuint makeProgramFromFiles(const char* vsPath, const char* fsPath)
-{
-    std::string vsSrcStr = readFile(vsPath);
-    std::string fsSrcStr = readFile(fsPath);
-    if (vsSrcStr.empty() || fsSrcStr.empty()) return 0;
-
-    const char* vsSrc = vsSrcStr.c_str();
-    const char* fsSrc = fsSrcStr.c_str();
-
-    GLuint vs = compileShader(GL_VERTEX_SHADER, vsSrc);
-    GLuint fs = compileShader(GL_FRAGMENT_SHADER, fsSrc);
-
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
-    glLinkProgram(prog);
-
-    GLint ok = 0;
-    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
-    if (!ok)
-    {
-        char log[2048];
-        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        std::cerr << "Program link error:\n" << log << std::endl;
-    }
-
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-    return prog;
-}
-
 // -------------------- CircleRenderer (ALL FIXED) --------------------
 class CircleRenderer
 {
@@ -110,7 +47,7 @@ public:
         if (VAO)         glDeleteVertexArrays(1, &VAO);
         if (meshVBO)     glDeleteBuffers(1, &meshVBO);
         if (instanceVBO) glDeleteBuffers(1, &instanceVBO);
-        if (shaderProgram) glDeleteProgram(shaderProgram);
+        if (myShader.ID) glDeleteProgram(myShader.ID);
     }
 
     void init(int w, int h, const char* vsFile, const char* fsFile)
@@ -118,7 +55,7 @@ public:
         windowWidth  = w;
         windowHeight = h;
 
-        setupShader(vsFile, fsFile);
+        myShader.init(vsFile, fsFile);
         setupCircleMesh();
         setupInstanceBuffer();
         updateProjection(windowWidth, windowHeight);
@@ -140,9 +77,9 @@ public:
 
     void draw()
     {
-        if (!shaderProgram || !VAO) return;
+        if (!myShader.ID || !VAO) return;
 
-        glUseProgram(shaderProgram);
+        myShader.use();
         glBindVertexArray(VAO);
 
         glDrawArraysInstanced(
@@ -154,17 +91,6 @@ public:
     }
 
 private:
-    void setupShader(const char* vsFile, const char* fsFile)
-    {
-        shaderProgram = makeProgramFromFiles(vsFile, fsFile);
-        std::cerr << "shaderProgram = " << shaderProgram << std::endl;
-
-        if (!shaderProgram)
-        {
-            std::cerr << "Failed to create shader program.\n";
-        }
-    }
-
     void setupCircleMesh()
     {
         std::vector<float> verts;
@@ -242,8 +168,8 @@ private:
         glm::mat4 proj = glm::ortho(-1.0f, 1.0f,
                                     -aspect, aspect);
 
-        glUseProgram(shaderProgram);
-        GLint loc = glGetUniformLocation(shaderProgram, "projection");
+        myShader.use();
+        GLint loc = glGetUniformLocation(myShader.ID, "projection");
         if (loc != -1)
         {
             glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(proj));
@@ -254,7 +180,7 @@ private:
     GLuint VAO = 0;
     GLuint meshVBO = 0;
     GLuint instanceVBO = 0;
-    GLuint shaderProgram = 0;
+    Shader myShader;
 
     int vertexCount = 0;
     int windowWidth = 1;
@@ -370,7 +296,8 @@ void storeCode()
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    Shader myShader(vertexCodeString, fragmentCodeString);
+    Shader myShader;
+    myShader.init(vertexCodeString, fragmentCodeString);
 
     //dodecahedron
     const float gr = (1 + std::sqrt(5)) / 2;
