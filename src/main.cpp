@@ -28,7 +28,10 @@ float find_angle(fftw_complex arr){
 }
 
 float test_func(float x){
-    return pow(x, 2);
+    if (x > 0.5){
+        return 0.5;
+    }
+    return -0.5;
 }
 
 fftw_complex *fft_test(int N, int direction){
@@ -40,7 +43,7 @@ fftw_complex *fft_test(int N, int direction){
     p = fftw_plan_dft_1d(N, in, out, direction, FFTW_ESTIMATE);
 
     for (int x = 0; x < N; x++){
-        in[x][0] = float(x)/N;
+        in[x][0] = 1;
         in[x][1] = test_func(float(x)/N);
     }
 
@@ -49,6 +52,17 @@ fftw_complex *fft_test(int N, int direction){
     fftw_destroy_plan(p);
     fftw_free(in); 
     return out;
+}
+
+int mapIndex(int i, int N){
+    int fftIndex;
+    if (i == 0)
+        fftIndex = 0;
+    else if (i % 2 == 1)
+        fftIndex = (i + 1) / 2;     // positive
+    else
+        fftIndex = N - (i / 2);        // negative
+    return fftIndex;
 }
 
 class Circle
@@ -60,24 +74,34 @@ public:
     float radius;
     float frequency;
 
-    Circle(int ID, fftw_complex *output) 
+    Circle(int ID, fftw_complex *output, int N) 
     {
-        double *complex = output[ID];
+        int k = mapIndex(ID, N);
+        double *complex = output[k];
         printf("1: %f, 2: %f\n", complex[0], complex[1]);
 
         float x = 0;
         float y = 0;
-        float normal = float(output[0][0]) * 5;
+        float normal = float(output[0][0]) * 2;
+        int prevI;
         for (int i = ID - 1; i >= 0; i--){
-            x += output[i][0];
-            y += output[i][1];
-        }
-        position = glm::vec3(x/normal, y/normal, 0);
 
-        this->ID = ID;
+            prevI = mapIndex(i, N);
+
+            x += output[prevI][0];
+            y += output[prevI][1];
+        }
+        position = glm::vec3(0.0f);
+
+        this->ID = k;
         this->starting_angle = find_angle(complex);
         this->radius = sqrt(pow(complex[0], 2) + pow(complex[1], 2)) / normal;
-        this->frequency = (float)ID;
+        float freq;
+        if (k <= N / 2)
+            freq = k;
+        else
+            freq = k - N;
+        this->frequency = freq;
     }
 };
 
@@ -110,7 +134,7 @@ public:
     {
         circles = c;
         for (int i = 0; i < c.size(); i++){
-            printf("circle %i, pos: %f, %f, radius: %f, angle: %f\n", i, c[i].position[0], c[i].position[1], c[i].radius, c[i].starting_angle);
+            printf("circle %i, pos: %f, %f, radius: %f, angle: %f\n", c[i].ID, c[i].position[0], c[i].position[1], c[i].radius, c[i].starting_angle);
         }
         updateInstanceBuffer();
     }
@@ -143,7 +167,7 @@ public:
             static_cast<GLsizei>(circles.size())
         );
     }
-
+    
 private:
     void setupCircleMesh()
     {
@@ -367,7 +391,7 @@ int main()
 
     std::vector<Circle> circles;
 
-    const int NUM_CIRCLES = 16;
+    const int NUM_CIRCLES = 512;
 
     // random generators
     std::mt19937 rng(std::random_device{}());
@@ -384,7 +408,8 @@ int main()
     {
         circles.emplace_back(
             i,
-            output
+            output,
+            NUM_CIRCLES
         );
     }
 
@@ -412,6 +437,17 @@ int main()
     {
         //input
         processInput(window);
+
+        float time = glfwGetTime();
+        glm::vec2 pos(0.0f);
+
+        for (auto& c : circles){
+            float a = c.starting_angle + c.frequency * time;
+            pos += c.radius * glm::vec2(cos(a), sin(a));
+            c.position = glm::vec3(pos, 0.0f);
+        }
+
+        renderer.setCircles(circles);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

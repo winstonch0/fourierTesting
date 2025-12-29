@@ -15,7 +15,7 @@ void main()
 
     mat2 rot = mat2(
         cos(angle), sin(angle),
-        -1*sin(angle), cos(angle)
+        -sin(angle), cos(angle)
     );
 
     vec2 rotated = vec2(rot * aPos.xy);
