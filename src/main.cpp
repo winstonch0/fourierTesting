@@ -443,8 +443,8 @@ int main()
 
         for (auto& c : circles){
             float a = c.starting_angle + c.frequency * time;
-            pos += c.radius * glm::vec2(cos(a), sin(a));
             c.position = glm::vec3(pos, 0.0f);
+            pos += c.radius * glm::vec2(cos(a), sin(a));
         }
 
         renderer.setCircles(circles);
