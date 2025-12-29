@@ -28,7 +28,7 @@ float find_angle(fftw_complex arr){
 }
 
 float test_func(float x){
-    return x + (float)std::pow(x, 2);
+    return pow(x, 2);
 }
 
 fftw_complex *fft_test(int N, int direction){
@@ -40,7 +40,8 @@ fftw_complex *fft_test(int N, int direction){
     p = fftw_plan_dft_1d(N, in, out, direction, FFTW_ESTIMATE);
 
     for (int x = 0; x < N; x++){
-        in[x][0] = test_func(float(x)/N);
+        in[x][0] = float(x)/N;
+        in[x][1] = test_func(float(x)/N);
     }
 
     fftw_execute(p);
@@ -53,13 +54,30 @@ fftw_complex *fft_test(int N, int direction){
 class Circle
 {
 public:
+    int ID;
+    float starting_angle;
     glm::vec3 position;
     float radius;
+    float frequency;
 
-    Circle(float x, float y, float z, float radius) 
+    Circle(int ID, fftw_complex *output) 
     {
-        position = glm::vec3(x, y, z);
-        this->radius = radius;
+        double *complex = output[ID];
+        printf("1: %f, 2: %f\n", complex[0], complex[1]);
+
+        float x = 0;
+        float y = 0;
+        float normal = float(output[0][0]) * 5;
+        for (int i = ID - 1; i >= 0; i--){
+            x += output[i][0];
+            y += output[i][1];
+        }
+        position = glm::vec3(x/normal, y/normal, 0);
+
+        this->ID = ID;
+        this->starting_angle = find_angle(complex);
+        this->radius = sqrt(pow(complex[0], 2) + pow(complex[1], 2)) / normal;
+        this->frequency = (float)ID;
     }
 };
 
@@ -82,8 +100,6 @@ public:
         windowWidth  = w;
         windowHeight = h;
 
-        output = fft_test(10, FFTW_FORWARD);
-
         myShader.init(vsFile, fsFile);
         setupCircleMesh();
         setupInstanceBuffer();
@@ -94,7 +110,7 @@ public:
     {
         circles = c;
         for (int i = 0; i < c.size(); i++){
-            printf("circle %i, pos: %f, %f, radius: %f\n", i, c[i].position[0], c[i].position[1], c[i].radius);
+            printf("circle %i, pos: %f, %f, radius: %f, angle: %f\n", i, c[i].position[0], c[i].position[1], c[i].radius, c[i].starting_angle);
         }
         updateInstanceBuffer();
     }
@@ -111,7 +127,13 @@ public:
     {
         if (!myShader.ID || !VAO) return;
 
+        float time = (float)glfwGetTime();
+
         myShader.use();
+
+        int timeLoc = glGetUniformLocation(myShader.ID, "time");
+        glUniform1f(timeLoc, time);
+
         glBindVertexArray(VAO);
 
         glDrawArraysInstanced(
@@ -134,12 +156,9 @@ private:
         verts.push_back(0.0f);
         verts.push_back(0.0f);
 
-        float starting_angle = find_angle(output[3]);
-        printf("vertex, %f, %f, starting angle %f\n", output[3][0], output[3][1], starting_angle);
-
         for (int i = 0; i <= SEGMENT_NUMBER; i++)
         {
-            float a = twoPi * i / SEGMENT_NUMBER + starting_angle;
+            float a = twoPi * i / SEGMENT_NUMBER;
             verts.push_back(std::cos(a));
             verts.push_back(std::sin(a));
             verts.push_back(0.0f);
@@ -151,8 +170,6 @@ private:
         glGenBuffers(1, &meshVBO);
 
         glBindVertexArray(VAO);
-
-        printf("vertz size %i\n", verts.size());
 
         glBindBuffer(GL_ARRAY_BUFFER, meshVBO);
         glBufferData(GL_ARRAY_BUFFER,
@@ -190,6 +207,20 @@ private:
         );
         glEnableVertexAttribArray(2);
         glVertexAttribDivisor(2, 1);
+        // Attribute 3: Circle.starting_angle (float)
+        glVertexAttribPointer(
+            3, 1, GL_FLOAT, GL_FALSE,
+            sizeof(Circle), (void*)offsetof(Circle, starting_angle)
+        );
+        glEnableVertexAttribArray(3);
+        glVertexAttribDivisor(3, 1);
+        // Attribute 4: Circle.frequency (float)
+        glVertexAttribPointer(
+            4, 1, GL_FLOAT, GL_FALSE,
+            sizeof(Circle), (void*)offsetof(Circle, frequency)
+        );
+        glEnableVertexAttribArray(4);
+        glVertexAttribDivisor(4, 1);
     }
 
     void updateInstanceBuffer()
@@ -222,7 +253,6 @@ private:
     GLuint meshVBO = 0;
     GLuint instanceVBO = 0;
     Shader myShader;
-    fftw_complex *output;
 
     int vertexCount = 0;
     int windowWidth = 1;
@@ -337,7 +367,7 @@ int main()
 
     std::vector<Circle> circles;
 
-    const int NUM_CIRCLES = 150;
+    const int NUM_CIRCLES = 16;
 
     // random generators
     std::mt19937 rng(std::random_device{}());
@@ -345,18 +375,16 @@ int main()
     std::uniform_real_distribution<float> posY(-0.9f, 0.9f);
     std::uniform_real_distribution<float> radiusDist(0.02f, 0.06f);
 
+    fftw_complex *output = fft_test(NUM_CIRCLES, FFTW_FORWARD);
+
     circles.clear();
     circles.reserve(NUM_CIRCLES);
 
     for (int i = 0; i < NUM_CIRCLES; ++i)
     {
-        float r = radiusDist(rng);
-
         circles.emplace_back(
-            posX(rng),
-            posY(rng),
-            0.0f,
-            r
+            i,
+            output
         );
     }
 
